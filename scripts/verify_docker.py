@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def step(label: str) -> None:
-    print(f"  • {label}")
+    print(f"  - {label}")
 
 
 def can_reach(host: str, port: int, timeout: float = 2.0) -> bool:
@@ -69,7 +69,7 @@ def main() -> int:
         sys.path.insert(0, str(ROOT))
         from app import main as app_main  # noqa: F401
 
-        print("\nAll checks passed — docker stack is ready. Run `make api`.")
+        print("\nAll checks passed - docker stack is ready. Run `make api`.")
         print("  Qdrant dashboard: http://localhost:6333/dashboard")
         return 0
     except Exception as exc:  # noqa: BLE001

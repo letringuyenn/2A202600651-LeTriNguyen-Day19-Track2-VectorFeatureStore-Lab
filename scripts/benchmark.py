@@ -39,7 +39,7 @@ def precision_at_k(retrieved_ids: list[str], relevant_ids: set[str], k: int = TO
 
 
 def main() -> int:
-    print("Day 19 benchmark — keyword vs semantic vs hybrid")
+    print("Day 19 benchmark - keyword vs semantic vs hybrid")
     print("=" * 62)
 
     # ── Load golden set ─────────────────────────────────────────────────
@@ -50,7 +50,7 @@ def main() -> int:
     print(f"  Loaded {len(golden)} golden queries")
 
     # ── Build searcher ──────────────────────────────────────────────────
-    print("  Building Searcher (this may take ~30s on first run — embedding the corpus)...")
+    print("  Building Searcher (this may take ~30s on first run - embedding the corpus)...")
     t0 = time.perf_counter()
     searcher = Searcher.from_corpus(ROOT / "data" / "corpus_vn.jsonl")
     print(f"  Indexed {searcher.size} docs in {time.perf_counter() - t0:.1f}s\n")
@@ -70,13 +70,13 @@ def main() -> int:
     avg_sem = stats.mean(p_sem)
     avg_hyb = stats.mean(p_hyb)
 
-    print("Quality — Precision@10 (% of top-10 in matching topic)")
+    print("Quality - Precision@10 (% of top-10 in matching topic)")
     print(f"  Keyword (BM25)   : {avg_kw:6.1%}")
     print(f"  Semantic (vector): {avg_sem:6.1%}")
     print(f"  Hybrid  (RRF=60) : {avg_hyb:6.1%}   <- should win")
     print()
 
-    # Slice by query type — does hybrid help paraphrase queries the most?
+    # Slice by query type - does hybrid help paraphrase queries the most?
     by_mode: dict[str, dict[str, list[float]]] = {}
     for q, kw, sem, hyb in zip(golden, p_kw, p_sem, p_hyb):
         by_mode.setdefault(q["mode_hint"], {"kw": [], "sem": [], "hyb": []})
@@ -97,7 +97,7 @@ def main() -> int:
     print()
 
     # ── Latency run (REPS reps × 50 queries) ────────────────────────────
-    print(f"Latency — P50 / P95 / P99 over {REPS_PER_QUERY * len(golden)} calls/mode")
+    print(f"Latency - P50 / P95 / P99 over {REPS_PER_QUERY * len(golden)} calls/mode")
     for mode in ("keyword", "semantic", "hybrid"):
         latencies = []
         for _ in range(REPS_PER_QUERY):
@@ -117,9 +117,9 @@ def main() -> int:
     if avg_hyb > avg_kw and avg_hyb > avg_sem:
         delta_kw = (avg_hyb - avg_kw) * 100
         delta_sem = (avg_hyb - avg_sem) * 100
-        print(f"PASS — hybrid beats keyword by {delta_kw:+.1f}pp, semantic by {delta_sem:+.1f}pp")
+        print(f"PASS - hybrid beats keyword by {delta_kw:+.1f}pp, semantic by {delta_sem:+.1f}pp")
         return 0
-    print(f"FAIL — hybrid did NOT beat both pure modes (kw={avg_kw:.1%} sem={avg_sem:.1%} hyb={avg_hyb:.1%})")
+    print(f"FAIL - hybrid did NOT beat both pure modes (kw={avg_kw:.1%} sem={avg_sem:.1%} hyb={avg_hyb:.1%})")
     print("       Check your RRF implementation: score(d) = sum_r 1/(k + rank_r(d)), k=60")
     return 1
 

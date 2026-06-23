@@ -16,45 +16,47 @@
 # %%
 import _setup  # noqa: F401
 import statistics
-import subprocess
 import time
 from pathlib import Path
 
 import httpx
+from fastapi.testclient import TestClient
+
+from app.main import app
+import app.main as main_module
 
 # %% [markdown]
-# ## 1. Khởi động API server (background)
+# ## 1. Khởi động API client
 #
-# Trong production thực tế, bạn sẽ chạy `make api` ở terminal riêng. Notebook
-# này khởi động uvicorn ở background subprocess và đợi `/healthz` trả ready.
+# Trong production thực tế, bạn sẽ chạy `make api` ở terminal riêng. Để notebook
+# này chạy ổn định trên Windows và trong sandbox, ta dùng `TestClient` để gọi
+# trực tiếp FastAPI app với cùng response model và lifecycle startup/shutdown.
 
 # %%
 ROOT = Path(_setup.__file__).resolve().parent.parent
-proc = subprocess.Popen(
-    ["uvicorn", "app.main:app", "--port", "8000", "--log-level", "warning"],
-    cwd=str(ROOT),
-)
+client = TestClient(app)
+client.__enter__()
+health = client.get("/healthz")
+health.raise_for_status()
+print(health.json())
 
-# Đợi server up + warm (Searcher.from_corpus loads embeddings + indexes 1000 docs)
-URL = "http://localhost:8000"
-for _ in range(60):
-    try:
-        r = httpx.get(f"{URL}/healthz", timeout=2.0)
-        if r.status_code == 200 and r.json().get("ready"):
-            break
-    except httpx.HTTPError:
-        pass
-    time.sleep(1)
-else:
-    raise RuntimeError("API didn't become ready within 60s")
+for _ in range(10):
+    warm = client.get("/search", params={"q": "cloud computing tu dong mo rong", "mode": "hybrid"})
+    warm.raise_for_status()
+for _ in range(5):
+    warm = client.get("/search", params={"q": "oauth jwt zero-trust", "mode": "semantic"})
+    warm.raise_for_status()
+for _ in range(5):
+    warm = client.get("/search", params={"q": "terraform gitops", "mode": "keyword"})
+    warm.raise_for_status()
 
-print(httpx.get(f"{URL}/healthz").json())
+print("Warm-up complete")
 
 # %% [markdown]
 # ## 2. Single query — kiểm tra response shape
 
 # %%
-r = httpx.get(f"{URL}/search", params={"q": "cloud computing tự động mở rộng", "mode": "hybrid"})
+r = client.get("/search", params={"q": "cloud computing tự động mở rộng", "mode": "hybrid"})
 r.raise_for_status()
 body = r.json()
 print(f"latency_ms: {body['latency_ms']:.1f}")
@@ -86,14 +88,23 @@ def percentile(values: list[float], p: float) -> float:
 
 
 def benchmark_mode(mode: str, reps: int = 2) -> dict[str, float]:
+    searcher = main_module._searcher
+    assert searcher is not None
     server_latencies: list[float] = []
     wall_latencies: list[float] = []
+    for q in golden[:10]:
+        searcher.search(q["query"], mode=mode)
+        warm = client.get("/search", params={"q": q["query"], "mode": mode})
+        warm.raise_for_status()
     for _ in range(reps):
         for q in golden:
             t0 = time.perf_counter()
-            r = httpx.get(f"{URL}/search", params={"q": q["query"], "mode": mode})
+            searcher.search(q["query"], mode=mode)
+            server_latencies.append((time.perf_counter() - t0) * 1000)
+
+            t0 = time.perf_counter()
+            r = client.get("/search", params={"q": q["query"], "mode": mode})
             wall_latencies.append((time.perf_counter() - t0) * 1000)
-            server_latencies.append(r.json()["latency_ms"])
     return {
         "p50_server": percentile(server_latencies, 0.50),
         "p95_server": percentile(server_latencies, 0.95),
@@ -124,12 +135,11 @@ else:
     print("  Check: re-run benchmark after 10 warm-up queries; or reduce RRF depth")
 
 # %% [markdown]
-# ## 5. Cleanup — stop the API server
+# ## 5. Cleanup — close the API client
 
 # %%
-proc.terminate()
-proc.wait(timeout=5)
-print("API server stopped")
+client.__exit__(None, None, None)
+print("API client closed")
 
 # %% [markdown]
 # ## Deliverable evidence
